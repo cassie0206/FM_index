@@ -9,6 +9,8 @@
 #include <vector>
 #include <string>
 #include <map>
+
+#include <fstream>
 #include <algorithm>
 
 using namespace std;
@@ -54,18 +56,11 @@ int* computeSuffixArray(char* input_text, int len_text)
     for (int i = 0; i < len_text; i++)
         suffix_arr[i] = suff[i].index;
 
-    cout << "suffix araay:\n";
-    for (int i = 0; i < len_text; i++) {
-        cout << "index: " << suff[i].index << " array: " << suff[i].suffix << "\n";
-    }
-
     // Returns the computed suffix array
     return suffix_arr;
 }
 
-// Takes suffix array and its size
-// as arguments and returns the
-// Burrows - Wheeler Transform of given text
+
 char* findLastChar(char* input_text,
     int* suffix_arr, int n)
 {
@@ -79,7 +74,7 @@ char* findLastChar(char* input_text,
         int j = suffix_arr[i] - 1;
         if (j < 0)
             j = j + n;
-
+        
         bwt_arr[i] = input_text[j];
     }
 
@@ -91,6 +86,8 @@ char* findLastChar(char* input_text,
 
 map<char, int> C;
 map<char, vector<int>> OCC;
+map<char, int> keep;
+string l;
 
 void getC(string str, int len) {
     int i = 1;
@@ -101,36 +98,81 @@ void getC(string str, int len) {
     }
 }
 
-void getOCC(string f, string l, string p) {
+void getOCC() {
+    vector<int> v((l.size() - 1) / 5 + 1, 0);
     for (int i = 0; i < l.size(); i++) {
-        if (l[i] == '$') {
+        if (l[i] == '$') { continue; }
+        OCC[l[i]] = v;
+    }
+
+    for (int i = 1; i <= 5 * (v.size() - 1); i++) {
+        if (l[i - 1] == '$') {
             continue;
         }
-        auto it = OCC.find(l[i]);
-        if (it != OCC.end()) {
-            int num = *(it->second.end() - 1) + 1;
-            while ((it->second.size() - 1) != i) {
-                it->second.push_back(num);
+        keep[l[i - 1]]++;
+        //cout << l[i] << " " << keep[l[i]] << "\n";
+        if (i % 5 == 0) {
+            OCC[l[i - 1]][i / 5] = keep[l[i - 1]];
+            continue;
+        }
+        OCC[l[i - 1]][i / 5 + 1] = keep[l[i - 1]];
+    }
+}
+
+int fastCalculateOCC(char c, int index) {
+    if (index % 5 == 0) {
+        return OCC[c][index / 5];
+    }
+    else {
+        int sum = 0;
+        if (index % 5 == 1 || index % 5 == 2) {
+            index--;
+            while (index % 5 != 0) {
+                if (l[index] == c) {
+                    if (l[index] == c) {
+                        sum++;
+                    }
+                }
+                index--;
             }
+            if (l[index] == c) {
+                if (l[index] == c) {
+                    sum++;
+                }
+            }
+            //cout << "sum: " << sum << endl;
+            return OCC[c][index / 5] + sum;
         }
         else {
-            OCC[l[i]].push_back(0);
-            for (int j = 0; j < i; j++) {
-                OCC[l[i]].push_back(0);
+            while (index % 5 != 0) {
+                if (l[index] == c) {
+                    if (l[index] == c) {
+                        sum++;
+                    }
+                }
+                index++;
             }
+            //cout << "sum: " << sum << endl;
+            return OCC[c][index / 5] - sum;
         }
     }
 }
 
 bool match(string p) {
     int i = p.size() - 1;
+    //cout << "range: " << i << endl;
     char c = p[i];
     auto it = C.find(c);
     if (it == C.end()) {
         return false;
     }
-    int sp = (it++)->second, ep = it->second;
+    int sp = (it++)->second;
+    if (it == C.end()) {
+        return false;
+    }
+    int ep = it->second;
     //cout << sp << " " << ep << endl;
+    //cout << "drbgr";
     i--;
 
     while (i >= 0) {
@@ -141,19 +183,20 @@ bool match(string p) {
         }
         int skip = it->second;
 
-        if (sp >= OCC[c].size()) {
-            sp = *(OCC[c].end() - 1) + skip + 1;
+        if (sp < l.size()) {
+            sp = fastCalculateOCC(c, sp) + skip;
         }
         else {
-            sp = OCC[c][sp] + skip;
+            sp = fastCalculateOCC(c, l.size() - 1) + skip + (l[l.size() - 1] == c);
         }
 
-        if (ep >= OCC[c].size()) {
-            ep = *(OCC[c].end() - 1) + skip + 1;
+        if (ep < l.size()) {
+            ep = fastCalculateOCC(c, ep) + skip;
         }
         else {
-            ep = OCC[c][ep] + skip;
+            ep = fastCalculateOCC(c, l.size() - 1) + skip + (l[l.size() - 1] == c);
         }
+        //cout << sp << " " << ep << endl;
         i--;
         if (ep <= sp) {
             return false;
@@ -165,43 +208,72 @@ bool match(string p) {
 
 // Driver program to test functions above
 int main()
-{    
-    char input_text[100];
-    //BWT
-    printf("Input text :");
-    scanf("%s", input_text);
-    int len_text = strlen(input_text);
-    input_text[len_text++] = '$';
-    //cout << input_text;
+{
+    int sum = 0, num = 0;
+    ifstream fin("pattern.txt");
+    char s[10];
+    vector<string> pattern_vec;
 
-    // Computes the suffix array of our text
-    int* suffix_arr = computeSuffixArray(input_text, len_text);
-
-    // Adds to the output array the last char
-    // of each rotation
-    char* bwt_arr = findLastChar(input_text, suffix_arr, len_text);
-
-    printf("Burrows - Wheeler Transform : %s\n",
-        bwt_arr);
-
-    //pattern matching
-    string p;
-    printf("Please input the pattern: ");
-    cin >> p;
-
-    string str = input_text;
-    str = str.substr(0, len_text);
-    sort(str.begin(), str.end());
-    getC(str, len_text);
-    getOCC(str, bwt_arr, p);
-    bool re = match(p);
+    while (fin >> s) {
+        pattern_vec.push_back(s);
+    }
     
-    if (re) {
-        printf("Success!\n");
+    char input_text[10];
+    // scanf("%s",input_text);
+    ifstream fin2("string.txt");
+    while (fin2 >> input_text) {
+        num++;
+        int len_text = strlen(input_text);
+        input_text[len_text++] = '$';
+        //cout << input_text;
+
+        // Computes the suffix array of our text
+        int* suffix_arr = computeSuffixArray(input_text, len_text);
+
+        // Adds to the output array the last char
+        // of each rotation
+        char* bwt_arr = findLastChar(input_text, suffix_arr, len_text);
+
+        // printf("Burrows - Wheeler Transform : %s\n",            bwt_arr);
+
+        l = bwt_arr;
+        string str = input_text;
+        str = str.substr(0, len_text);
+        sort(str.begin(), str.end());
+        getC(str, len_text);
+        getOCC();
+
+        //pattern matching
+        string p;
+        // printf("Please input the pattern: ");
+        //--------------------------------------------
+        // cin >> p;
+        for (int i = 0; i < pattern_vec.size(); i++) {
+
+            p = pattern_vec[i];
+            bool re = match(p);
+            // cout<<i;
+            if (re) {
+                sum++;
+                //cout << p << " " << input_text << endl;
+                break;
+            }
+
+
+
+        }
+        //cout << "fewu";
+        OCC.clear();
+        C.clear();
+        //-----------------------------------------------
+
+
     }
-    else {
-        printf("Fail\n");
-    }
+    cout << "match: " << sum << endl;
+    cout << "number: " << num << endl;
+
+
+    //BWT
 
 
 
